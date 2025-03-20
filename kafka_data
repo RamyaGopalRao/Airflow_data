@@ -1,0 +1,40 @@
+from kafka import KafkaProducer, KafkaConsumer
+from airflow import DAG
+from airflow.operators.python import PythonOperator
+from datetime import datetime
+
+KAFKA_TOPIC = 'my_topic'
+KAFKA_BOOTSTRAP_SERVERS = 'localhost:9092'
+
+# Producer function
+def publish_to_kafka(**kwargs):
+    producer = KafkaProducer(bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS)
+    message = b"This is some large data"
+    producer.send(KAFKA_TOPIC, message)
+    print(f"Published message: {message}")
+    producer.close()
+
+# Consumer function
+def consume_from_kafka(**kwargs):
+    consumer = KafkaConsumer(KAFKA_TOPIC, bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS)
+    for message in consumer:
+        print(f"Consumed message: {message.value.decode()}")
+        break  # Stop after consuming one message
+    consumer.close()
+
+# DAG definition
+with DAG(
+    dag_id='kafka_example',
+    start_date=datetime(2023, 1, 1),
+    schedule_interval=None,
+) as dag:
+    producer_task = PythonOperator(
+        task_id='publish_to_kafka',
+        python_callable=publish_to_kafka,
+    )
+    consumer_task = PythonOperator(
+        task_id='consume_from_kafka',
+        python_callable=consume_from_kafka,
+    )
+
+    producer_task >> consumer_task
