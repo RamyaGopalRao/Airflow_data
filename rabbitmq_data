@@ -1,0 +1,44 @@
+import pika
+from airflow import DAG
+from airflow.operators.python import PythonOperator
+from datetime import datetime
+
+RABBITMQ_HOST = 'localhost'
+QUEUE_NAME = 'my_queue'
+
+# Producer function
+def publish_to_rabbitmq(**kwargs):
+    connection = pika.BlockingConnection(pika.ConnectionParameters(host=RABBITMQ_HOST))
+    channel = connection.channel()
+    channel.queue_declare(queue=QUEUE_NAME)
+    message = "Large data payload"
+    channel.basic_publish(exchange='', routing_key=QUEUE_NAME, body=message)
+    print(f"Published message: {message}")
+    connection.close()
+
+# Consumer function
+def consume_from_rabbitmq(**kwargs):
+    connection = pika.BlockingConnection(pika.ConnectionParameters(host=RABBITMQ_HOST))
+    channel = connection.channel()
+    channel.queue_declare(queue=QUEUE_NAME)
+    method_frame, header_frame, body = channel.basic_get(queue=QUEUE_NAME, auto_ack=True)
+    if body:
+        print(f"Consumed message: {body.decode()}")
+    connection.close()
+
+# DAG definition
+with DAG(
+    dag_id='rabbitmq_example',
+    start_date=datetime(2023, 1, 1),
+    schedule_interval=None,
+) as dag:
+    producer_task = PythonOperator(
+        task_id='publish_to_rabbitmq',
+        python_callable=publish_to_rabbitmq,
+    )
+    consumer_task = PythonOperator(
+        task_id='consume_from_rabbitmq',
+        python_callable=consume_from_rabbitmq,
+    )
+
+    producer_task >> consumer_task
